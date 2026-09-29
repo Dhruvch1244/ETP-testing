@@ -12,7 +12,9 @@
 
 services:
   postgres:
-    image: postgres:16-alpine
+    build:
+      context: .
+      dockerfile: infra/postgres/Dockerfile
     container_name: trading-postgres
     environment:
       POSTGRES_DB: ${DB_NAME:-trading_system_db}
@@ -22,8 +24,6 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./sprint8/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
-      - ./sprint8/db/seed-data.sql:/docker-entrypoint-initdb.d/02-seed-data.sql:ro
     networks:
       - trading-network
     healthcheck:
@@ -37,12 +37,12 @@ services:
     image: apache/kafka:3.8.0
     container_name: trading-kafka
     ports:
-      - "9092:9092"
+      - "${KAFKA_HOST_PORT:-9094}:9092"
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: "broker,controller"
       KAFKA_LISTENERS: "PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093,PLAINTEXT_HOST://0.0.0.0:9092"
-      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:${KAFKA_HOST_PORT:-9094}"
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT"
       KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka:9093"
       KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
