@@ -36,6 +36,11 @@ services:
   kafka:
     image: apache/kafka:3.8.0
     container_name: trading-kafka
+    # First-boot self-registration occasionally races Docker's embedded DNS
+    # before it's finished registering this container's own network alias,
+    # which fails the KRaft controller handshake and exits the container.
+    # Restarting picks it up immediately since the alias exists by then.
+    restart: on-failure:3
     ports:
       - "${KAFKA_HOST_PORT:-9094}:9092"
     environment:
