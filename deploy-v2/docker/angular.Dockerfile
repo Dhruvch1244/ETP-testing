@@ -27,8 +27,9 @@ RUN for d in $PREBUILD; do (cd "/src/$d" && (npm ci --no-audit --no-fund || npm 
 # Dependencies were installed without their scripts (the sources were not there
 # yet). Run the project's postinstall now: it often generates the API clients,
 # and openapi-generator needs Java for that.
-RUN if grep -q '"postinstall"' package.json; then \
-      if grep -q 'openapi-generator' package.json; then apk add --no-cache openjdk21-jre-headless >/dev/null; fi; \
+# openapi-generator (in postinstall or in the build itself) needs Java.
+RUN if grep -q 'openapi-generator' package.json; then apk add --no-cache openjdk21-jre-headless >/dev/null; fi; \
+    if grep -q '"postinstall"' package.json; then \
       npm run postinstall || echo "postinstall failed; continuing (the build shows whether it mattered)"; \
     fi
 ARG BUILD_SCRIPT=build
