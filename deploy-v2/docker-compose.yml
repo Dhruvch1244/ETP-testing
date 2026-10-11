@@ -11,7 +11,9 @@ services:
   # Started only while database.host is `postgres`. With an RDS endpoint
   # there, this container is left out.
   postgres:
-    image: postgres:17-alpine
+    # Debian-based, with SSL on (its built-in self-signed certificate), like RDS: services that
+    # require SSL in production connect; services that do not use SSL connect as before.
+    image: postgres:17
     profiles: [localdb]
     env_file: .env
     environment:
@@ -25,7 +27,8 @@ services:
       - |
         export POSTGRES_PASSWORD="$$(printenv "$$DB_PASSWORD_ENV")"
         unset PGSSLMODE PGHOST PGPORT
-        exec docker-entrypoint.sh postgres
+        exec docker-entrypoint.sh postgres -c ssl=on \
+          -c ssl_cert_file=/etc/ssl/certs/ssl-cert-snakeoil.pem -c ssl_key_file=/etc/ssl/private/ssl-cert-snakeoil.key
     ports:
       - "5432:5432"
     volumes:
@@ -92,7 +95,7 @@ services:
         echo "=== topics ready ==="
   # Started only when project.yaml has mailpit: true.
   mailpit:
-    image: axllent/mailpit:latest
+    image: axllent/mailpit:v1.31.4
     profiles: [mail]
     ports:
       - "8025:8025"

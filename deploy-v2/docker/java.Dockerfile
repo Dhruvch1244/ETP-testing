@@ -55,6 +55,9 @@ ARG APP_PORT=8081
 ENV APP_PORT=${APP_PORT} SERVER_PORT=${APP_PORT}
 EXPOSE ${APP_PORT}
 ENV JAVA_OPTS=""
+# A mail server outage (or no mail login yet) must not mark the service down:
+# Spring's mail health check otherwise fails /actuator/health and the probes.
+ENV MANAGEMENT_HEALTH_MAIL_ENABLED=false
 
 USER app
 

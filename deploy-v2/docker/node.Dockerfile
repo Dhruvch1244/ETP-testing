@@ -6,6 +6,9 @@ ARG RUNTIME_VERSION=22
 # Stage 1: install everything and build
 FROM node:${RUNTIME_VERSION}-alpine AS build
 WORKDIR /app
+# Native modules (argon2, bcrypt) fall back to compiling when their pre-built
+# binary cannot be downloaded; that needs python3, make and g++.
+RUN apk add --no-cache python3 make g++ >/dev/null
 
 COPY package*.json ./
 RUN npm ci --no-fund --no-audit || npm install --no-fund --no-audit
@@ -15,6 +18,9 @@ COPY src ./src
 
 ARG NEEDS_BUILD=true
 RUN if [ "$NEEDS_BUILD" = "true" ]; then npm run build; fi
+# Keep only production dependencies; the runtime copies them instead of installing
+# (and downloading native modules) a second time.
+RUN npm prune --omit=dev --no-fund --no-audit
 
 # Stage 2: run, with production dependencies only
 FROM node:${RUNTIME_VERSION}-alpine AS runtime
@@ -22,7 +28,7 @@ ENV NODE_ENV=production
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci --omit=dev --no-fund --no-audit || npm install --omit=dev --no-fund --no-audit
+COPY --from=build /app/node_modules ./node_modules
 
 ARG BUILD_OUTPUT=dist
 COPY --from=build /app/${BUILD_OUTPUT} ./${BUILD_OUTPUT}

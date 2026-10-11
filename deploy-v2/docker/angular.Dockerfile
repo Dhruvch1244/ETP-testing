@@ -10,6 +10,9 @@ FROM node:${RUNTIME_VERSION}-alpine AS build
 # No questions during the build: the Angular CLI otherwise waits for an answer
 # to its usage-data prompt and the build never finishes.
 ENV CI=true NG_CLI_ANALYTICS=false
+# An image build never has the runtime secrets. Bundle checks that compare the build against
+# them (scripts/check-bundle-secrets.mjs) still scan, but skip the values that are not set.
+ENV ALLOW_MISSING_SECRET_VALUES=1
 # MODULE is the app's folder inside the build context: "." normally; with
 # build_from (an app that reads a Config folder above it) the context is the
 # parent and MODULE the path down to the app.

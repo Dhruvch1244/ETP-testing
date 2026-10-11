@@ -20,6 +20,8 @@ folders:
     path: executor-service
     type: java
     health: /actuator/health
+    # health: ''    no page answers 200: only check that the port is open
+    # health: none  no web server at all (a background worker): no checks
 
 sql:
   - db/schema.sql

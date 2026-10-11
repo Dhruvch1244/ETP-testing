@@ -250,7 +250,7 @@ def build_settings(cfg):
             f"{key}_VERSION": str(service.get("version", VERSIONS[service["type"]])),
             f"{key}_PORT": service["port"],
             f"{key}_LISTEN": listen_port(service),
-            f"{key}_HEALTH": service.get("health", "/"),
+            f"{key}_HEALTH": "" if service.get("health") == "none" else service.get("health", "/"),
             f"{key}_TEST": "true" if service.get("test") else "false",
         })
     return out
@@ -296,7 +296,7 @@ def fill_secrets(cfg, phase, found):
     for name, value in found.items():
         if not value and (GENERATABLE.search(name) or not TYPED_ONLY.search(name)):
             # *_KEY: an encryption key, usually read as base64 of 32 bytes (openssl rand -base64 32).
-            found[name] = base64.b64encode(tokens.token_bytes(32)).decode() if name.endswith("_KEY") else tokens.token_hex(24)
+            found[name] = base64.b64encode(tokens.token_bytes(32)).decode() if name.endswith("_KEY") else tokens.token_hex(32)
     values = {**placeholders(cfg, phase), **found}
     for name, template in (cfg.get("derived_secrets") or {}).items():
         try:
@@ -381,15 +381,30 @@ def k8s_files(cfg):
                 "\n".join(f"  {k}: {json.dumps(str(v))}" for k, v in own.items()) or "  {}"))
         service = svc[role]
         cpu, memory, cpu_limit, memory_limit = RESOURCES[service["type"]]
-        files[f"{name}.yaml"] = render(app, {
+        health = service.get("health", "/")
+        manifest = render(app, {
             **common, "NAME": name,
             "IMAGE": f"{aws['registry']}/{aws['image_prefix']}-{name}:{FIRST_TAG}",
             "PORT": service["port"], "LISTEN": listen_port(service),
-            "HEALTH": service.get("health", "/"),
+            "HEALTH": health if health and health != "none" else "/",
             "CPU": cpu, "MEMORY": memory, "CPU_LIMIT": cpu_limit, "MEMORY_LIMIT": memory_limit,
             # The two services that use Kafka wait until its topics exist.
             "INIT": render(WAIT_FOR_KAFKA, common) if role in ("order", "executor") else "",
         })
+        if health == "none":
+            # health: none means the service has no web server at all (a background worker):
+            # nothing can be probed, so Kubernetes only restarts it if the process exits.
+            manifest = re.sub(r"          (startup|readiness|liveness)Probe:\n(            .*\n)+", "", manifest)
+        elif not health:
+            # health: '' means the service has no page that answers 200. An HTTP probe would then
+            # get 404 or 401 and restart the pod forever, so the probes only check the port is open,
+            # and the ALB counts any HTTP answer as healthy.
+            manifest = manifest.replace(
+                "httpGet:\n              path: /\n              port: http", "tcpSocket:\n              port: http")
+            manifest = manifest.replace(
+                "    alb.ingress.kubernetes.io/healthcheck-path: /\n",
+                "    alb.ingress.kubernetes.io/healthcheck-path: /\n    alb.ingress.kubernetes.io/success-codes: 200-499\n")
+        files[f"{name}.yaml"] = manifest
 
     rules = []
     for role in ("auth", "order", "executor"):
